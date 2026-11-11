@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vitrine — Catálogo</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#f6f7f5;color:#202720;font:16px Arial,sans-serif}header{background:#183c2b;color:white;padding:22px max(calc((100% - 1050px)/2),24px);display:flex;justify-content:space-between;align-items:center}h1{margin:0;font-size:24px}button{border:0;border-radius:7px;padding:10px 14px;background:#286444;color:white;font-weight:bold;cursor:pointer}button:hover{background:#194b31}.outline{background:transparent;border:1px solid #ffffff99}.wrap{max-width:1050px;margin:32px auto;padding:0 20px}h2{margin:0 0 18px}.catalog{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:18px}.card,.panel{background:white;border:1px solid #e1e6e1;border-radius:10px;overflow:hidden}.card img{width:100%;height:175px;object-fit:contain;padding:8px;background:#edf0ed}.info{padding:14px}.info h3{margin:0 0 8px}.info p{color:#586158;margin:8px 0}.price{font-size:19px;font-weight:bold;color:#286444}.panel{padding:20px;margin-bottom:28px}.hidden{display:none!important}form{display:flex;flex-wrap:wrap;gap:12px;align-items:end}label{display:grid;gap:6px;flex:1;min-width:145px;font-size:14px}input{width:100%;padding:10px;border:1px solid #cbd3cb;border-radius:6px;font:inherit}.wide{flex-basis:100%}.manage{display:flex;gap:8px;align-items:center;margin-top:12px}.manage button{padding:6px 11px}.notice{font-size:13px;color:#586158;margin:12px 0 0}.empty{color:#586158}.error{color:#a12727}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Vitrine</h1>
+    <button id="login-toggle" class="outline">Área do administrador</button>
+  </header>
+  <main class="wrap">
+    <section id="login-panel" class="panel hidden">
+      <h2>Entrar como administrador</h2>
+      <form id="login-form">
+        <label>Usuário<input name="user" autocomplete="username" required></label>
+        <label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+        <button>Entrar</button>
+      </form>
+      <p class="notice">Acesso de demonstração: usuário <b>admin</b>, senha <b>admin123</b>. Troque por autenticação de servidor antes de publicar.</p>
+      <p id="login-error" class="error"></p>
+    </section>
+    <section id="admin-panel" class="panel hidden">
+      <h2>Gerenciar produtos</h2>
+      <form id="product-form">
+        <label>Produto<input name="name" maxlength="60" required></label>
+        <label>Preço (R$)<input name="price" type="number" min="0.01" step="0.01" required></label>
+        <label>Estoque<input name="stock" type="number" min="0" step="1" value="0" required></label>
+        <label>Foto<input name="photo" type="file" accept="image/*" required></label>
+        <button>Adicionar produto</button>
+      </form>
+      <p id="message" class="notice">Os produtos ficam salvos neste navegador.</p>
+    </section>
+    <h2>Catálogo de produtos</h2>
+    <section id="catalog" class="catalog" aria-live="polite"></section>
+  </main>
+  <script>
+    const KEY = 'vitrine-products';
+    const catalog = document.querySelector('#catalog');
+    const loginPanel = document.querySelector('#login-panel');
+    const adminPanel = document.querySelector('#admin-panel');
+    const message = document.querySelector('#message');
+    let products = JSON.parse(localStorage.getItem(KEY) || '[]');
+    let isAdmin = false;
+
+    function save() {
+      try {
+        localStorage.setItem(KEY, JSON.stringify(products));
+        render();
+        message.textContent = 'Alterações salvas neste navegador.';
+        message.className = 'notice';
+      } catch {
+        message.textContent = 'Não foi possível salvar. Remova algumas fotos ou use imagens menores.';
+        message.className = 'notice error';
+      }
+    }
+
+    function render() {
+      catalog.replaceChildren();
+      if (!products.length) {
+        catalog.innerHTML = '<p class="empty">Nenhum produto cadastrado ainda.</p>';
+        return;
+      }
+      products.forEach((product, index) => {
+        const card = document.createElement('article');
+        card.className = 'card';
+        const image = document.createElement('img');
+        image.src = product.photo;
+        image.alt = product.name;
+        const info = document.createElement('div');
+        info.className = 'info';
+        const name = document.createElement('h3');
+        name.textContent = product.name;
+        const price = document.createElement('p');
+        price.className = 'price';
+        price.textContent = Number(product.price).toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+        const stock = document.createElement('p');
+        stock.textContent = `Estoque: ${product.stock}`;
+        info.append(name, price, stock);
+        if (isAdmin) {
+          const manage = document.createElement('div');
+          manage.className = 'manage';
+          const less = document.createElement('button');
+          less.textContent = '−';
+          less.setAttribute('aria-label', `Diminuir estoque de ${product.name}`);
+          less.onclick = () => { products[index].stock = Math.max(0, Number(products[index].stock) - 1); save(); };
+          const more = document.createElement('button');
+          more.textContent = '+';
+          more.setAttribute('aria-label', `Aumentar estoque de ${product.name}`);
+          more.onclick = () => { products[index].stock = Number(products[index].stock) + 1; save(); };
+          const remove = document.createElement('button');
+          remove.textContent = 'Excluir';
+          remove.onclick = () => { products.splice(index, 1); save(); };
+          manage.append(less, more, remove);
+          info.append(manage);
+        }
+        card.append(image, info);
+        catalog.append(card);
+      });
+    }
+
+    document.querySelector('#login-toggle').onclick = () => {
+      if (isAdmin) {
+        isAdmin = false;
+        adminPanel.classList.add('hidden');
+        document.querySelector('#login-toggle').textContent = 'Área do administrador';
+        render();
+      } else loginPanel.classList.toggle('hidden');
+    };
+
+    document.querySelector('#login-form').onsubmit = event => {
+      event.preventDefault();
+      const data = new FormData(event.currentTarget);
+      if (data.get('user') !== 'admin' || data.get('password') !== 'admin123') {
+        document.querySelector('#login-error').textContent = 'Usuário ou senha incorretos.';
+        return;
+      }
+      isAdmin = true;
+      loginPanel.classList.add('hidden');
+      adminPanel.classList.remove('hidden');
+      document.querySelector('#login-toggle').textContent = 'Sair';
+      document.querySelector('#login-error').textContent = '';
+      render();
+    };
+
+    document.querySelector('#product-form').onsubmit = event => {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const data = new FormData(form);
+      const photo = data.get('photo');
+      if (!photo || photo.size > 1024 * 1024) {
+        message.textContent = 'Escolha uma foto de até 1 MB.';
+        message.className = 'notice error';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        products.push({name:data.get('name').trim(), price:Number(data.get('price')), stock:Number(data.get('stock')), photo:reader.result});
+        save();
+        form.reset();
+      };
+      reader.onerror = () => {
+        message.textContent = 'Não foi possível ler a foto escolhida.';
+        message.className = 'notice error';
+      };
+      reader.readAsDataURL(photo);
+    };
+
+    render();
+  </script>
+</body>
+</html>
